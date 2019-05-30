@@ -136,11 +136,13 @@ export class SuggestController extends Disposable implements IEditorContribution
 			}
 		}));
 
-		// Manage the acceptSuggestionsOnEnter context key
+		// Manage the acceptSuggestionsOnEnter context key and tabCompletion
 		let acceptSuggestionsOnEnter = SuggestContext.AcceptSuggestionsOnEnter.bindTo(_contextKeyService);
+		let partialTabCompletions = SuggestContext.PartialTabCompletions.bindTo(_contextKeyService);
 		let updateFromConfig = () => {
-			const { acceptSuggestionOnEnter } = this._editor.getConfiguration().contribInfo;
+			const { acceptSuggestionOnEnter, tabCompletion} = this._editor.getConfiguration().contribInfo;
 			acceptSuggestionsOnEnter.set(acceptSuggestionOnEnter === 'on' || acceptSuggestionOnEnter === 'smart');
+			partialTabCompletions.set(tabCompletion === 'partial');
 		};
 		this._register(this._editor.onDidChangeConfiguration((e) => updateFromConfig()));
 		updateFromConfig();
@@ -328,6 +330,32 @@ export class SuggestController extends Disposable implements IEditorContribution
 		this._insertSuggestion(item, !!keepAlternativeSuggestions, true);
 	}
 
+	acceptSelectedSuggestionPartial(keepAlternativeSuggestions?: boolean): void {
+		let focusedSuggest = this._widget.getValue().getFocusedItem();
+
+		// Verify if `partial` tabCompletion is enabled and modify the `insertText` accordingly
+		const { tabCompletion } = this._editor.getConfiguration().contribInfo;
+		if (tabCompletion === 'partial' && focusedSuggest !== undefined  && focusedSuggest.item.word !== undefined ) {
+			// Find next word break character in selected suggestion
+			const currentCursorPosition = focusedSuggest.item.completion.insertText.indexOf('_', focusedSuggest.item.word.length+1);
+
+			if (currentCursorPosition !== -1) {
+				// Word break character found, split selected suggestion
+				const partialSuggestText = focusedSuggest.item.completion.insertText.substr(0, currentCursorPosition+1);
+				focusedSuggest.item.completion.insertText = partialSuggestText;
+			}
+		}
+
+		// Insert Suggest as usual
+		this._insertSuggestion(focusedSuggest, !!keepAlternativeSuggestions, true);
+
+		if (tabCompletion === 'partial') {
+			// Retrigger suggestion if word not completed
+			this._model.trigger({ auto: true, shy: false }, true);
+		}
+
+	}
+
 	acceptNextSuggestion() {
 		this._alternatives.getValue().next();
 	}
@@ -414,7 +442,7 @@ const SuggestCommand = EditorCommand.bindToContribution<SuggestController>(Sugge
 
 registerEditorCommand(new SuggestCommand({
 	id: 'acceptSelectedSuggestion',
-	precondition: SuggestContext.Visible,
+	precondition: ContextKeyExpr.and(SuggestContext.Visible, SuggestContext.PartialTabCompletions.toNegated()),
 	handler: x => x.acceptSelectedSuggestion(true),
 	kbOpts: {
 		weight: weight,
@@ -422,6 +450,7 @@ registerEditorCommand(new SuggestCommand({
 		primary: KeyCode.Tab
 	}
 }));
+
 
 registerEditorCommand(new SuggestCommand({
 	id: 'acceptSelectedSuggestionOnEnter',
@@ -431,6 +460,30 @@ registerEditorCommand(new SuggestCommand({
 		weight: weight,
 		kbExpr: ContextKeyExpr.and(EditorContextKeys.textInputFocus, SuggestContext.AcceptSuggestionsOnEnter, SuggestContext.MakesTextEdit),
 		primary: KeyCode.Enter
+	}
+}));
+
+// Accept full suggestion command while in Partial Mode
+registerEditorCommand(new SuggestCommand({
+	id: 'acceptSelectedSuggestionFull',
+	precondition: ContextKeyExpr.and(SuggestContext.Visible, SuggestContext.PartialTabCompletions),
+	handler: x => x.acceptSelectedSuggestion(true),
+	kbOpts: {
+		weight: weight,
+		kbExpr: EditorContextKeys.textInputFocus,
+		primary: KeyMod.Shift | KeyCode.Tab
+	}
+}));
+
+// Accept partial suggestion while in Partial Mode
+registerEditorCommand(new SuggestCommand({
+	id: 'acceptSelectedSuggestionPartial',
+	precondition: ContextKeyExpr.and(SuggestContext.Visible,SuggestContext.PartialTabCompletions),
+	handler: x => x.acceptSelectedSuggestionPartial(true),
+	kbOpts: {
+		weight: weight,
+		kbExpr: EditorContextKeys.textInputFocus,
+		primary: KeyCode.Tab
 	}
 }));
 
@@ -533,7 +586,6 @@ registerEditorCommand(new SuggestCommand({
 }));
 
 //#region tab completions
-
 registerEditorCommand(new SuggestCommand({
 	id: 'insertBestCompletion',
 	precondition: ContextKeyExpr.and(

@@ -612,7 +612,7 @@ export interface IEditorOptions {
 	/**
 	 * Enable tab completion.
 	 */
-	tabCompletion?: boolean | 'on' | 'off' | 'onlySnippets';
+	tabCompletion?: boolean | 'on' | 'off' | 'onlySnippets' | 'partial';
 	/**
 	 * Enable selection highlight.
 	 * Defaults to true.
@@ -1027,7 +1027,7 @@ export interface EditorContribOptions {
 	readonly suggestSelection: 'first' | 'recentlyUsed' | 'recentlyUsedByPrefix';
 	readonly suggestFontSize: number;
 	readonly suggestLineHeight: number;
-	readonly tabCompletion: 'on' | 'off' | 'onlySnippets';
+	readonly tabCompletion: 'on' | 'off' | 'onlySnippets' | 'partial';
 	readonly suggest: InternalSuggestOptions;
 	readonly gotoLocation: InternalGoToLocationOptions;
 	readonly selectionHighlight: boolean;
@@ -1958,14 +1958,13 @@ export class EditorOptionsValidator {
 			multiple: _stringSet<'peek' | 'gotoAndPeek' | 'goto'>(gotoOpts.multiple, defaults.multiple, ['peek', 'gotoAndPeek', 'goto'])
 		};
 	}
-
-	private static _sanitizeTabCompletionOpts(opts: boolean | 'on' | 'off' | 'onlySnippets' | undefined, defaults: 'on' | 'off' | 'onlySnippets'): 'on' | 'off' | 'onlySnippets' {
+	private static _sanitizeTabCompletionOpts(opts: boolean | 'on' | 'off' | 'onlySnippets' | 'partial' | undefined, defaults: 'on' | 'off' | 'onlySnippets' | 'partial'): 'on' | 'off' | 'onlySnippets' | 'partial' {
 		if (opts === false) {
 			return 'off';
 		} else if (opts === true) {
 			return 'onlySnippets';
 		} else {
-			return _stringSet<'on' | 'off' | 'onlySnippets'>(opts, defaults, ['on', 'off', 'onlySnippets']);
+			return _stringSet<'on' | 'off' | 'onlySnippets' | 'partial'>(opts, defaults, ['on', 'off', 'onlySnippets', 'partial']);
 		}
 	}
 
